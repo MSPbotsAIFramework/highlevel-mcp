@@ -1,0 +1,113 @@
+[
+  {
+    "id": "TC1",
+    "ac": "AC1",
+    "text": "Given valid HighLevel credentials, When the agent calls tools/list, Then the response lists exactly the 12 HighLevel tools, each read-only tool flagged readOnlyHint: true",
+    "type": "auto",
+    "tests": ["tests/test_tools.py::test_tools_list_snapshot"]
+  },
+  {
+    "id": "TC2",
+    "ac": "AC2",
+    "text": "Given a request with X-HighLevel-Private-Token missing, When any tool is called, Then the server returns HTTP 401 naming the missing header",
+    "type": "auto",
+    "tests": ["tests/test_middleware.py::test_missing_token_header_returns_401"]
+  },
+  {
+    "id": "TC3",
+    "ac": "AC2",
+    "text": "Given a request with X-HighLevel-Location-Id missing, When any tool is called, Then the server returns HTTP 401 naming the missing header",
+    "type": "auto",
+    "tests": ["tests/test_middleware.py::test_missing_location_header_returns_401"]
+  },
+  {
+    "id": "TC4",
+    "ac": "AC3",
+    "text": "Given valid credentials, When highlevel_search_contacts is called with a query matching no contacts, Then it returns an empty contacts list with has_more: false, not an error",
+    "type": "auto",
+    "tests": ["tests/test_tools.py::test_search_contacts_empty_result"],
+    "notes": "stubbed-upstream unit test today; needs a real vendor account for an end-to-end confirmation"
+  },
+  {
+    "id": "TC5",
+    "ac": "AC4",
+    "text": "Given valid credentials, When highlevel_get_contact is called with a non-existent contact id, Then it returns the not_found error envelope, not an exception or 500",
+    "type": "auto",
+    "tests": ["tests/test_tools.py::test_get_contact_not_found"],
+    "notes": "stubbed-upstream unit test today; needs a real vendor account for an end-to-end confirmation"
+  },
+  {
+    "id": "TC6",
+    "ac": "AC5",
+    "text": "Given the upstream HighLevel API returns 429, When any tool calls it, Then the connector retries with backoff and, if still failing, returns the rate_limited error envelope rather than a raw passthrough",
+    "type": "auto",
+    "tests": ["tests/test_tools.py::test_rate_limited_retries_then_maps_to_error"]
+  },
+  {
+    "id": "TC7",
+    "ac": "AC6",
+    "text": "Given two concurrent requests carrying two different sub-accounts' credentials (Location A and Location B), When both call highlevel_search_contacts at the same time, Then each response contains only its own Location's contacts",
+    "type": "manual",
+    "steps": [
+      "Obtain two HighLevel sub-account (Location) Private Integration Tokens: A and B, each with at least one distinct contact not present in the other",
+      "Call POST /mcp tools/call highlevel_search_contacts with Location A's headers",
+      "Concurrently (or immediately after) call the same tool with Location B's headers",
+      "Compare the two result sets"
+    ],
+    "expect": "Location A's response contains only Location A's contacts; Location B's response contains only Location B's contacts; neither list contains the other's contact",
+    "result": "untested",
+    "notes": "needs two real HighLevel sub-accounts"
+  },
+  {
+    "id": "TC8",
+    "ac": "AC7",
+    "text": "Given valid credentials, When highlevel_create_contact is called with required fields and then highlevel_add_contact_note is called with the returned contact id, Then the note is visible when the contact is re-fetched",
+    "type": "manual",
+    "steps": [
+      "Call highlevel_create_contact with a name and an email",
+      "Note the returned contact_id",
+      "Call highlevel_add_contact_note with that contact_id and a note_text",
+      "Call highlevel_get_contact with that contact_id"
+    ],
+    "expect": "The create call returns a contact_id; the get call's response includes the note just added",
+    "result": "untested",
+    "notes": "needs a real vendor account"
+  },
+  {
+    "id": "TC9",
+    "ac": "AC8",
+    "text": "Given valid credentials, When highlevel_list_appointments is called for a date range with no events, Then it returns an empty appointments list, not an error",
+    "type": "auto",
+    "tests": ["tests/test_tools.py::test_list_appointments_empty_range"],
+    "notes": "stubbed-upstream unit test today; needs a real vendor account for an end-to-end confirmation"
+  },
+  {
+    "id": "TC10",
+    "ac": "AC9",
+    "text": "Given a list tool's result set exceeds the default page size, When limit is omitted, Then at most 50 items are returned with has_more: true and a cursor; When limit exceeds the hard cap, Then the response is capped at 200 items",
+    "type": "auto",
+    "tests": ["tests/test_tools.py::test_search_contacts_pagination_caps_at_200"]
+  },
+  {
+    "id": "TC11",
+    "ac": "AC10",
+    "text": "Given an existing contact, When highlevel_update_contact changes a field and highlevel_add_contact_tags adds a tag, Then both changes are visible when the contact is re-fetched",
+    "type": "manual",
+    "steps": [
+      "Create or pick an existing contact, note its contact_id",
+      "Call highlevel_update_contact to change one field (e.g. phone)",
+      "Call highlevel_add_contact_tags with a new tag",
+      "Call highlevel_get_contact with that contact_id"
+    ],
+    "expect": "The re-fetched contact shows the updated field and includes the new tag",
+    "result": "untested",
+    "notes": "needs a real vendor account"
+  },
+  {
+    "id": "TC12",
+    "ac": "permission/multi-tenant (backend)",
+    "text": "Given a request's X-HighLevel-Location-Id header, When the connector builds its outbound call to the upstream API, Then the locationId used is always the one from that same request's context, never a value left over from a previous request",
+    "type": "auto",
+    "tests": ["tests/test_middleware.py::test_context_isolation_across_concurrent_requests"]
+  }
+]
