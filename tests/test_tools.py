@@ -6,6 +6,7 @@ exercises.
 """
 
 import json
+import logging
 
 import pytest
 
@@ -344,3 +345,52 @@ async def test_no_delete_tools_exist():
         assert "delete" not in tool.name
         ann = tool.annotations
         assert not (ann is not None and ann.destructiveHint)
+
+
+@pytest.mark.asyncio
+async def test_tool_call_logs_outcome_and_latency_on_success(monkeypatch, caplog):
+    """Tech design "Non-functional / Observability": log tool name, outcome,
+    and latency per call."""
+
+    async def fake_get(self, path, params=None):
+        return {"pipelines": [{"id": "p1"}]}
+
+    caplog.set_level(logging.INFO, logger="highlevel_mcp.tools")
+    await _call(monkeypatch, "get", fake_get, "highlevel_list_pipelines", {})
+
+    records = [r for r in caplog.records if r.name == "highlevel_mcp.tools"]
+    assert len(records) == 1
+    msg = records[0].getMessage()
+    assert "tool=highlevel_list_pipelines" in msg
+    assert "outcome=success" in msg
+    assert "latency_ms=" in msg
+
+
+@pytest.mark.asyncio
+async def test_tool_call_logs_error_code_without_pii_or_credentials(monkeypatch, caplog):
+    """Error outcome logs the fixed-vocabulary code, never the credential
+    value, the contact_id argument, or the error message body (may contain
+    PII per Tech design)."""
+
+    async def fake_get(self, path):
+        raise HighLevelAPIError(404, "contact not found: alice@example.com")
+
+    caplog.set_level(logging.INFO, logger="highlevel_mcp.tools")
+    await _call(
+        monkeypatch,
+        "get",
+        fake_get,
+        "highlevel_get_contact",
+        {"contact_id": "c-secret-id"},
+        location_id="loc-B",
+    )
+
+    records = [r for r in caplog.records if r.name == "highlevel_mcp.tools"]
+    assert len(records) == 1
+    msg = records[0].getMessage()
+    assert "tool=highlevel_get_contact" in msg
+    assert "outcome=not_found" in msg
+    assert "latency_ms=" in msg
+    assert "c-secret-id" not in msg
+    assert "alice@example.com" not in msg
+    assert "tok" not in msg

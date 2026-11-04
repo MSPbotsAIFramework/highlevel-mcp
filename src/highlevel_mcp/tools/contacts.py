@@ -12,11 +12,12 @@ from pydantic import Field
 
 from .._json import dump_json_capped, error_envelope
 from ..client import HighLevelClient, HighLevelAPIError, decode_cursor, encode_cursor
-from ._common import NO_TOKEN, clamp_limit
+from ._common import NO_TOKEN, clamp_limit, log_call
 
 
 def register(mcp: FastMCP, client_factory: Callable[[], HighLevelClient | None]) -> None:
     @mcp.tool(annotations=ToolAnnotations(readOnlyHint=True))
+    @log_call("highlevel_search_contacts")
     async def highlevel_search_contacts(
         query: Annotated[
             str | None, Field(description="Optional free-text search (name, email, phone).")
@@ -65,6 +66,7 @@ def register(mcp: FastMCP, client_factory: Callable[[], HighLevelClient | None])
         )
 
     @mcp.tool(annotations=ToolAnnotations(readOnlyHint=True))
+    @log_call("highlevel_get_contact")
     async def highlevel_get_contact(
         contact_id: Annotated[str, Field(description="Required HighLevel contact ID.")],
     ) -> str:
@@ -82,6 +84,7 @@ def register(mcp: FastMCP, client_factory: Callable[[], HighLevelClient | None])
         return dump_json_capped({"contact": contact})
 
     @mcp.tool()
+    @log_call("highlevel_create_contact")
     async def highlevel_create_contact(
         name: Annotated[str | None, Field(description="Full name. Optional if email or phone is given.")] = None,
         email: Annotated[str | None, Field(description="Optional, but name/email/phone — at least one is required.")] = None,
@@ -117,6 +120,7 @@ def register(mcp: FastMCP, client_factory: Callable[[], HighLevelClient | None])
         return dump_json_capped({"contact_id": contact_id})
 
     @mcp.tool(annotations=ToolAnnotations(idempotentHint=True))
+    @log_call("highlevel_update_contact")
     async def highlevel_update_contact(
         contact_id: Annotated[str, Field(description="Required HighLevel contact ID.")],
         name: Annotated[str | None, Field(description="Optional new full name.")] = None,
@@ -146,6 +150,7 @@ def register(mcp: FastMCP, client_factory: Callable[[], HighLevelClient | None])
         return dump_json_capped({"contact": contact})
 
     @mcp.tool()
+    @log_call("highlevel_add_contact_note")
     async def highlevel_add_contact_note(
         contact_id: Annotated[str, Field(description="Required HighLevel contact ID.")],
         note_text: Annotated[str, Field(description="Required note body.")],
@@ -167,6 +172,7 @@ def register(mcp: FastMCP, client_factory: Callable[[], HighLevelClient | None])
         return dump_json_capped({"note_id": note_id})
 
     @mcp.tool(annotations=ToolAnnotations(idempotentHint=True))
+    @log_call("highlevel_add_contact_tags")
     async def highlevel_add_contact_tags(
         contact_id: Annotated[str, Field(description="Required HighLevel contact ID.")],
         tags: Annotated[list[str], Field(description="Required list of tags to add.")],

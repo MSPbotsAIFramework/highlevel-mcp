@@ -9,11 +9,12 @@ from pydantic import Field
 
 from .._json import dump_json_capped
 from ..client import HighLevelClient, HighLevelAPIError, decode_cursor, encode_cursor
-from ._common import NO_TOKEN, clamp_limit
+from ._common import NO_TOKEN, clamp_limit, log_call
 
 
 def register(mcp: FastMCP, client_factory: Callable[[], HighLevelClient | None]) -> None:
     @mcp.tool(annotations=ToolAnnotations(readOnlyHint=True))
+    @log_call("highlevel_list_conversations")
     async def highlevel_list_conversations(
         contact_id: Annotated[str | None, Field(description="Optional: filter to one contact's conversations.")] = None,
         status: Annotated[str | None, Field(description="Optional: filter by conversation status.")] = None,
@@ -56,6 +57,7 @@ def register(mcp: FastMCP, client_factory: Callable[[], HighLevelClient | None])
         )
 
     @mcp.tool(annotations=ToolAnnotations(readOnlyHint=True))
+    @log_call("highlevel_get_conversation_messages")
     async def highlevel_get_conversation_messages(
         conversation_id: Annotated[str, Field(description="Required conversation ID.")],
         limit: Annotated[int | None, Field(description="Max results, default 50, hard cap 200.")] = None,

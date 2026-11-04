@@ -9,11 +9,12 @@ from pydantic import Field
 
 from .._json import dump_json_capped
 from ..client import HighLevelClient, HighLevelAPIError, decode_cursor, encode_cursor
-from ._common import NO_TOKEN, clamp_limit
+from ._common import NO_TOKEN, clamp_limit, log_call
 
 
 def register(mcp: FastMCP, client_factory: Callable[[], HighLevelClient | None]) -> None:
     @mcp.tool(annotations=ToolAnnotations(readOnlyHint=True))
+    @log_call("highlevel_list_calendars")
     async def highlevel_list_calendars() -> str:
         """List the calendars configured in the connected Location."""
         client = client_factory()
@@ -27,6 +28,7 @@ def register(mcp: FastMCP, client_factory: Callable[[], HighLevelClient | None])
         return dump_json_capped({"calendars": calendars})
 
     @mcp.tool(annotations=ToolAnnotations(readOnlyHint=True))
+    @log_call("highlevel_list_appointments")
     async def highlevel_list_appointments(
         start_date: Annotated[str, Field(description="Required range start, ISO 8601 date or datetime.")],
         end_date: Annotated[str, Field(description="Required range end, ISO 8601 date or datetime.")],

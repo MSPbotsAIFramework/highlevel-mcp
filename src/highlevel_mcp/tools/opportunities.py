@@ -10,11 +10,12 @@ from pydantic import Field
 
 from .._json import dump_json_capped
 from ..client import HighLevelClient, HighLevelAPIError, decode_cursor, encode_cursor
-from ._common import NO_TOKEN, clamp_limit
+from ._common import NO_TOKEN, clamp_limit, log_call
 
 
 def register(mcp: FastMCP, client_factory: Callable[[], HighLevelClient | None]) -> None:
     @mcp.tool(annotations=ToolAnnotations(readOnlyHint=True))
+    @log_call("highlevel_list_pipelines")
     async def highlevel_list_pipelines() -> str:
         """List the sales pipelines configured in the connected Location,
         each with its stages.
@@ -32,6 +33,7 @@ def register(mcp: FastMCP, client_factory: Callable[[], HighLevelClient | None])
         return dump_json_capped({"pipelines": pipelines})
 
     @mcp.tool(annotations=ToolAnnotations(readOnlyHint=True))
+    @log_call("highlevel_list_opportunities")
     async def highlevel_list_opportunities(
         pipeline_id: Annotated[str | None, Field(description="Optional: filter to one pipeline.")] = None,
         stage_id: Annotated[str | None, Field(description="Optional: filter to one pipeline stage.")] = None,
