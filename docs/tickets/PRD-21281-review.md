@@ -11,7 +11,7 @@ Verdict: changes requested
    OSError: Readme file does not exist: README.md
    The command '/bin/sh -c uv sync --frozen --no-dev' returned a non-zero code: 1
    ```
-   This is the exact gap the dev leg's own Handoff flagged as untested ("no docker group in the sandbox") — it is not an environment-permission issue, it is a real build break, reproducible in an environment that does have Docker. SOP §14 checklist's container item ("docker build ... 可构建并正常启动") is unmet. Fix: drop `README.md` from `.dockerignore` (or stop pointing `pyproject.toml`'s `readme` field at a path excluded from the image build context).
+   This is the exact gap the dev leg's own Handoff flagged as untested ("no docker group in the sandbox") — it is not an environment-permission issue, it is a real build break, reproducible in an environment that does have Docker. SOP §14 checklist's container item ("docker build --platform linux/amd64 builds and starts correctly") is unmet. Fix: drop `README.md` from `.dockerignore` (or stop pointing `pyproject.toml`'s `readme` field at a path excluded from the image build context).
 
 2. [must-fix] No logging exists anywhere in `src/highlevel_mcp/` (confirmed via `grep -rni "logg\|print(" src/` — zero hits outside the one startup-banner `print` in `__main__.py:36`), but Tech design §"Non-functional" (`docs/tickets/PRD-21281.md:164`) explicitly requires: "log tool name, outcome (success/error code), and latency per call; never log the token or location ID value, never log full response bodies." This is a stated tech-design requirement with no implementation and no corresponding note in Self-test/Handoff explaining why it was skipped — per `references/REVIEW.md` §3, an undisclosed gap is treated as a BLOCKER rather than a WARN. Fix: add the per-call log line (tool name, outcome code, latency) described in the tech design, or, if intentionally deferred, say so with a reason in the ticket doc (Risks/Non-goals) instead of leaving it silently absent.
 
@@ -39,3 +39,26 @@ Re-ran the full suite after both fixes: `uv run pytest -v` → 24 passed, 0 fail
 Not re-verified in this round (same as round 1, no change): the four "needs a real vendor account" test cases (AC3/AC4/AC6/AC7/AC8/AC9/AC10 against live HighLevel data) — no vendor sandbox credentials are available on this machine either; per SOP "no test account is not a blocker".
 
 `gitleaks` is still not installed on this machine (same as round 1) — not run, consistent with "run it if present".
+
+Correction to the Round 1 entry above: the SOP §14 checklist item was originally quoted in its source (non-English) wording, which is not allowed in this English-only MCP repo. Replaced with an English paraphrase; no change in meaning or to the Round 1 verdict.
+
+## Round 2 · 2026-11-04 · reviewed a29e88f..161c85b (base main@1cddc52, dev branch unchanged from round 1 otherwise)
+
+Verdict: approved
+
+### Fixes verified (independently re-run, not just read)
+
+1. **`.dockerignore` / docker build** — confirmed `README.md` is no longer excluded (`.dockerignore` diff: the `README.md` line is removed, nothing else changed). Independently ran `sudo docker build --platform linux/amd64 --no-cache -t highlevel-mcp-review:prd21281 .` at commit `161c85b`: build succeeded, with only the same three pre-existing `UndefinedVar` warnings for `$VERSION`/`$BUILD_DATE`/`$COMMIT_SHA` (unrelated to this fix — those build args are genuinely not passed at this stage). Ran the image: `GET /health` → `200 {"status":"ok"}`; `initialize` → full `serverInfo`/`instructions` payload; `tools/call highlevel_list_pipelines` with placeholder credentials → structured `unauthorized` error envelope from the real HighLevel API (proves the server actually reaches the upstream, not a stub).
+2. **Per-call logging** — confirmed all 12 `@mcp.tool` definitions across `contacts.py` (6), `opportunities.py` (2), `calendar.py` (2), `conversations.py` (2) now carry `@log_call("<tool_name>")` directly under `@mcp.tool(...)`, each name matching its function (`grep -c "@log_call" src/highlevel_mcp/tools/*.py` sums to 12). `log_call` wraps with `functools.wraps`, so `inspect.signature()` (what FastMCP uses to build each tool's JSON schema) still resolves through `__wrapped__` to the original signature — `tests/test_tools.py::test_tools_list_snapshot` (unchanged from round 1, still passing) is the regression guard for that. Independently reproduced the container log line from the same live run above: `... INFO highlevel_mcp.tools tool=highlevel_list_pipelines outcome=unauthorized latency_ms=169.4` — no `httpx`/`httpcore` request line present, no credential value or Location ID anywhere in the container's stdout/stderr. `_outcome_of()` only parses the small `{"error": {"code": ...}}` shape, never the full body — read and agree with the reasoning.
+3. **Tests** — `uv run pytest -v` independently re-run at `161c85b`: 24 passed, 0 failed, matching the `[DEV]` stub's count exactly (21 pre-existing + 3 new: `test_observability.py::test_configure_logging_silences_httpx_and_httpcore`, `test_tools.py::test_tool_call_logs_outcome_and_latency_on_success`, `test_tools.py::test_tool_call_logs_error_code_without_pii_or_credentials`). Read the two new logging tests' assertions — they check for absence of the credential value, the `contact_id` argument, and the raw error message, not just presence of a log line.
+
+### New diff since round 1 reviewed sha, anything besides the two fixes
+
+- `docs/tickets/PRD-21281-review.md` — dev's own `### Fixes (round 1)` subsection, consistent with the two fixes above; no edits to the frozen main ticket doc (`docs/tickets/PRD-21281.md` / `.ac.json` — confirmed via `git diff aa0cb08 HEAD -- docs/tickets/PRD-21281.md docs/tickets/PRD-21281.ac.json`, empty).
+- No other files touched; no new dependency added (`pyproject.toml` / `uv.lock` unchanged).
+
+### Conclusion
+
+Both round-1 must-fix items are fixed and independently verified live (not just re-read from the dev's report). No new issues found in the round-2 diff. 0 must-fix, 0 suggestions.
+
+Status: frozen @ 161c85b
