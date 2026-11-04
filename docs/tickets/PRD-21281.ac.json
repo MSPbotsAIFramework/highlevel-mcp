@@ -4,21 +4,27 @@
     "ac": "AC1",
     "text": "Given valid HighLevel credentials, When the agent calls tools/list, Then the response lists exactly the 12 HighLevel tools, each read-only tool flagged readOnlyHint: true",
     "type": "auto",
-    "tests": ["tests/test_tools.py::test_tools_list_snapshot"]
+    "tests": ["tests/test_tools.py::test_tools_list_snapshot"],
+    "result": "pass",
+    "evidence": "uv run pytest -v (2026-11-04): tests/test_tools.py::test_tools_list_snapshot PASSED. Also confirmed live over HTTP: POST /mcp tools/list with placeholder headers (no prior initialize, proving statelessness) returned exactly the 12 tools with correct readOnlyHint flags."
   },
   {
     "id": "TC2",
     "ac": "AC2",
     "text": "Given a request with X-HighLevel-Private-Token missing, When any tool is called, Then the server returns HTTP 401 naming the missing header",
     "type": "auto",
-    "tests": ["tests/test_middleware.py::test_missing_token_header_returns_401"]
+    "tests": ["tests/test_middleware.py::test_missing_token_header_returns_401_naming_both"],
+    "result": "pass",
+    "evidence": "uv run pytest -v: PASSED. Also confirmed live: curl -X POST /mcp with X-HighLevel-Location-Id only -> 401, body required_headers includes X-HighLevel-Private-Token."
   },
   {
     "id": "TC3",
     "ac": "AC2",
     "text": "Given a request with X-HighLevel-Location-Id missing, When any tool is called, Then the server returns HTTP 401 naming the missing header",
     "type": "auto",
-    "tests": ["tests/test_middleware.py::test_missing_location_header_returns_401"]
+    "tests": ["tests/test_middleware.py::test_missing_location_header_returns_401_naming_both"],
+    "result": "pass",
+    "evidence": "uv run pytest -v: PASSED. Also confirmed live: curl -X POST /mcp with no headers at all -> 401, body required_headers = [X-HighLevel-Private-Token, X-HighLevel-Location-Id]."
   },
   {
     "id": "TC4",
@@ -26,6 +32,8 @@
     "text": "Given valid credentials, When highlevel_search_contacts is called with a query matching no contacts, Then it returns an empty contacts list with has_more: false, not an error",
     "type": "auto",
     "tests": ["tests/test_tools.py::test_search_contacts_empty_result"],
+    "result": "pass",
+    "evidence": "uv run pytest -v: PASSED (stubbed HighLevelClient.get returns {contacts: [], meta: {}}; tool returns {contacts: [], has_more: false, cursor: null}).",
     "notes": "stubbed-upstream unit test today; needs a real vendor account for an end-to-end confirmation"
   },
   {
@@ -34,6 +42,8 @@
     "text": "Given valid credentials, When highlevel_get_contact is called with a non-existent contact id, Then it returns the not_found error envelope, not an exception or 500",
     "type": "auto",
     "tests": ["tests/test_tools.py::test_get_contact_not_found"],
+    "result": "pass",
+    "evidence": "uv run pytest -v: PASSED (stubbed 404 from HighLevelClient.get maps to {error:{code:not_found,...}}). Also confirmed live: a real tools/call against https://services.leadconnectorhq.com with a placeholder bearer token returned the structured {\"error\":{\"code\":\"unauthorized\",\"message\":\"Invalid JWT\",\"retryable\":false}} envelope, not a 500 or a crash -- same code path handles 404.",
     "notes": "stubbed-upstream unit test today; needs a real vendor account for an end-to-end confirmation"
   },
   {
@@ -41,7 +51,12 @@
     "ac": "AC5",
     "text": "Given the upstream HighLevel API returns 429, When any tool calls it, Then the connector retries with backoff and, if still failing, returns the rate_limited error envelope rather than a raw passthrough",
     "type": "auto",
-    "tests": ["tests/test_tools.py::test_rate_limited_retries_then_maps_to_error"]
+    "tests": [
+      "tests/test_tools.py::test_rate_limited_maps_to_error_envelope",
+      "tests/test_tools.py::test_client_retries_on_429_then_raises_rate_limited"
+    ],
+    "result": "pass",
+    "evidence": "uv run pytest -v: both PASSED. test_client_retries_on_429_then_raises_rate_limited drives the real HighLevelClient._request retry loop against a fake httpx client returning 429 every time (asyncio.sleep patched out) and asserts exactly 4 attempts (1 + 3 retries) and 3 backoff sleeps before the rate_limited envelope surfaces."
   },
   {
     "id": "TC7",
@@ -56,7 +71,7 @@
     ],
     "expect": "Location A's response contains only Location A's contacts; Location B's response contains only Location B's contacts; neither list contains the other's contact",
     "result": "untested",
-    "notes": "needs two real HighLevel sub-accounts"
+    "notes": "needs two real HighLevel sub-accounts. Backend isolation mechanism (never reading a stale contextvar across concurrent requests) is covered by TC12, which passed."
   },
   {
     "id": "TC8",
@@ -71,7 +86,7 @@
     ],
     "expect": "The create call returns a contact_id; the get call's response includes the note just added",
     "result": "untested",
-    "notes": "needs a real vendor account"
+    "notes": "needs a real vendor account. Each half (create -> contact_id, add_contact_note -> note_id) is covered against a stubbed upstream by tests/test_tools.py::test_create_contact_returns_new_contact_id and ::test_add_contact_note_returns_note_id (both pass), but the full round-trip through a real re-fetch is not verified."
   },
   {
     "id": "TC9",
@@ -79,6 +94,8 @@
     "text": "Given valid credentials, When highlevel_list_appointments is called for a date range with no events, Then it returns an empty appointments list, not an error",
     "type": "auto",
     "tests": ["tests/test_tools.py::test_list_appointments_empty_range"],
+    "result": "pass",
+    "evidence": "uv run pytest -v: PASSED.",
     "notes": "stubbed-upstream unit test today; needs a real vendor account for an end-to-end confirmation"
   },
   {
@@ -86,7 +103,9 @@
     "ac": "AC9",
     "text": "Given a list tool's result set exceeds the default page size, When limit is omitted, Then at most 50 items are returned with has_more: true and a cursor; When limit exceeds the hard cap, Then the response is capped at 200 items",
     "type": "auto",
-    "tests": ["tests/test_tools.py::test_search_contacts_pagination_caps_at_200"]
+    "tests": ["tests/test_tools.py::test_search_contacts_pagination_caps_at_200"],
+    "result": "pass",
+    "evidence": "uv run pytest -v: PASSED. Asserts captured upstream params.limit == 50 by default (returns exactly 50 items, has_more true, non-empty cursor) and == 200 when the caller asks for limit=10000."
   },
   {
     "id": "TC11",
@@ -101,13 +120,15 @@
     ],
     "expect": "The re-fetched contact shows the updated field and includes the new tag",
     "result": "untested",
-    "notes": "needs a real vendor account"
+    "notes": "needs a real vendor account. Each half is covered against a stubbed upstream by tests/test_tools.py::test_update_contact_and_add_tags_roundtrip (passes), but the full round-trip through a real re-fetch is not verified."
   },
   {
     "id": "TC12",
     "ac": "permission/multi-tenant (backend)",
     "text": "Given a request's X-HighLevel-Location-Id header, When the connector builds its outbound call to the upstream API, Then the locationId used is always the one from that same request's context, never a value left over from a previous request",
     "type": "auto",
-    "tests": ["tests/test_middleware.py::test_context_isolation_across_concurrent_requests"]
+    "tests": ["tests/test_middleware.py::test_context_isolation_across_concurrent_requests"],
+    "result": "pass",
+    "evidence": "uv run pytest -v: PASSED. Two interleaved fake requests (Location A sleeps mid-request to force a context switch before reading the contextvar, Location B runs to completion in between) each observe only their own (token, location_id) pair."
   }
 ]

@@ -1,0 +1,30 @@
+[project]
+name = "highlevel-mcp"
+version = "0.1.0"
+description = "MCP server for HighLevel (GoHighLevel) CRM — contacts, opportunities, calendar, conversations"
+readme = "README.md"
+license = "Apache-2.0"
+requires-python = ">=3.12"
+dependencies = [
+    "mcp[cli]>=1.9.0,<2.0.0",
+    "httpx>=0.27.0",
+    "pydantic-settings>=2.3.0",
+    "uvicorn>=0.30.0",
+    "starlette>=0.41.0",
+]
+
+[project.scripts]
+highlevel-mcp = "highlevel_mcp.__main__:main"
+
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[tool.hatch.build.targets.wheel]
+packages = ["src/highlevel_mcp"]
+
+[dependency-groups]
+dev = [
+    "pytest>=9.1.1",
+    "pytest-asyncio>=1.4.0",
+]
